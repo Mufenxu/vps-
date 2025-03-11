@@ -4,6 +4,8 @@ const TELEGRAM_CHAT_ID = 'YOUR_TELEGRAM_CHAT_ID';
 
 // 统一使用的背景图片（简约风景照）
 const BACKGROUND_IMAGE = 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?fit=crop&w=1950&q=80';
+// 新的好看图标（favicon），可根据需要替换
+const FAVICON_URL = 'https://img.icons8.com/fluency/48/000000/cloud.png';
 
 addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request))
@@ -53,7 +55,7 @@ async function handleRequest(request) {
     });
   }
   
-  // 已登录则显示仪表板
+  // 登录后显示仪表板
   return handleDashboard(request);
 }
 
@@ -97,7 +99,7 @@ async function handleLogin(request) {
   }
 }
 
-// —— 登录页面 ——（保持原效果，不做修改）
+// —— 登录页面 ——
 function renderLoginPage(errorMsg = '') {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -105,6 +107,7 @@ function renderLoginPage(errorMsg = '') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>登录 - VPS监控</title>
+  <link rel="icon" href="${FAVICON_URL}" type="image/png">
   <style>
     body {
       margin: 0; padding: 0;
@@ -199,6 +202,7 @@ function renderAddPage() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>添加VPS - VPS监控</title>
+  <link rel="icon" href="${FAVICON_URL}" type="image/png">
   <style>
     html, body { margin: 0; padding: 0; height: 100%; }
     body {
@@ -269,7 +273,6 @@ function renderAddPage() {
 }
 
 // —— 编辑 VPS ——  
-// 根据 URL 参数 id 查找对应 VPS，GET 时预填表单；POST 时更新数据
 async function handleEdit(request) {
   if (!isAuthenticated(request)) return Response.redirect('/', 302);
   const url = new URL(request.url);
@@ -309,6 +312,7 @@ function renderEditPage(vps) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>编辑VPS - VPS监控</title>
+  <link rel="icon" href="${FAVICON_URL}" type="image/png">
   <style>
     html, body { margin: 0; padding: 0; height: 100%; }
     body {
@@ -393,11 +397,18 @@ async function handleDelete(request) {
 }
 
 // —— 仪表板 ——  
-// 去掉原“厂商”列，改为“详细信息”列：点击按钮后弹出美化后的模态窗口显示详细信息，同时提供复制功能
+// 1. 对 VPS 列表按注册日期升序排序
+// 2. 日期显示采用 YYYY-MM-DD 格式（通过 toISOString().split('T')[0]）
+// 3. “编辑”和“删除”按钮放在同一行（使用内联 Flex 容器）
+// 4. “VPS名称”和日期列增加 white-space: nowrap 以避免换行
+// 5. “服务商”列只显示服务商名称，点击直接跳转到官网
 async function handleDashboard(request) {
   const vpsKey = 'vpsList';
   let vpsList = await VPS_DATA.get(vpsKey, { type: 'json' });
   if (!vpsList) vpsList = [];
+  
+  // 按注册日期升序排序
+  vpsList.sort((a, b) => new Date(a.registrationDate) - new Date(b.registrationDate));
   
   let tableRows = vpsList.map(vps => {
     const regDate = new Date(vps.registrationDate);
@@ -421,22 +432,25 @@ async function handleDashboard(request) {
     }
     return `<tr>
       <td>${statusIcon}</td>
-      <td>${vps.name}</td>
+      <td style="white-space: nowrap;">${vps.name}</td>
       <td>
         <button class="btn-detail" onclick="showDetailModal('${vps.username}','${vps.password}','${vps.serverAddress}','${vps.email}')">详细信息</button>
       </td>
-      <td>${vps.provider}</td>
-      <td>${regDate.toLocaleDateString()}</td>
-      <td>${expDate.toLocaleDateString()}</td>
+      <td>
+        <a class="btn" href="${vps.website}" target="_blank">${vps.provider}</a>
+      </td>
+      <td style="white-space: nowrap;">${regDate.toISOString().split('T')[0]}</td>
+      <td style="white-space: nowrap;">${expDate.toISOString().split('T')[0]}</td>
       <td>
         <div class="progress">
           <div class="progress-bar" style="width:${percent}%;">${percent}%</div>
         </div>
       </td>
-      <td><a class="btn" href="${vps.website}" target="_blank">官网</a></td>
       <td>
-        <a class="btn" href="/edit?id=${vps.id}">编辑</a>
-        <a class="btn btn-danger" href="/delete?id=${vps.id}" onclick="return confirm('确认删除此VPS吗？')">删除</a>
+        <div style="display:inline-flex; gap:10px;">
+          <a class="btn" href="/edit?id=${vps.id}">编辑</a>
+          <a class="btn btn-danger" href="/delete?id=${vps.id}" onclick="return confirm('确认删除此VPS吗？')">删除</a>
+        </div>
       </td>
     </tr>`;
   }).join('');
@@ -446,8 +460,7 @@ async function handleDashboard(request) {
   });
 }
 
-// —— 仪表板页面 ——  
-// 外层加滚动容器保证横向显示，同时在页面底部添加模态弹窗的 HTML 和脚本，用于展示详细信息和复制功能
+// —— 仪表板页面 ——
 function renderDashboardPage(tableRows) {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -455,6 +468,7 @@ function renderDashboardPage(tableRows) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VPS监控仪表板</title>
+  <link rel="icon" href="${FAVICON_URL}" type="image/png">
   <style>
     html, body { margin: 0; padding: 0; height: 100%; }
     body {
@@ -487,6 +501,7 @@ function renderDashboardPage(tableRows) {
       background: #667eea; color: white; text-decoration: none;
       border-radius: 4px; font-size: 14px;
       transition: background 0.3s, box-shadow 0.3s; margin-right: 4px;
+      white-space: nowrap;
     }
     .btn:hover { background: #556cd6; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
     .btn-danger { background: #e74c3c; }
@@ -495,6 +510,7 @@ function renderDashboardPage(tableRows) {
       padding: 6px 12px; background: #3498db; color: white;
       border: none; border-radius: 4px; font-size: 14px;
       cursor: pointer; transition: background 0.3s, box-shadow 0.3s;
+      white-space: nowrap;
     }
     .btn-detail:hover { background: #2980b9; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
     /* 模态窗口样式 */
@@ -550,12 +566,11 @@ function renderDashboardPage(tableRows) {
             <th>注册时间</th>
             <th>到期日期</th>
             <th>剩余时间</th>
-            <th>官网链接</th>
             <th>操作</th>
           </tr>
         </thead>
         <tbody>
-          ${tableRows || `<tr><td colspan="9" style="text-align:center;">暂无数据</td></tr>`}
+          ${tableRows || `<tr><td colspan="8" style="text-align:center;">暂无数据</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -606,7 +621,6 @@ function renderDashboardPage(tableRows) {
         alert("复制失败: " + err);
       });
     }
-    // 点击模态框外部区域关闭
     window.onclick = function(event) {
       var modal = document.getElementById('detailModal');
       if (event.target == modal) {
@@ -619,7 +633,6 @@ function renderDashboardPage(tableRows) {
 }
 
 // —— 定时任务检测 ——  
-// 每次检测 VPS 剩余不足 7 天时发送 Telegram 提醒
 async function checkExpirations() {
   const vpsKey = 'vpsList';
   let vpsList = await VPS_DATA.get(vpsKey, { type: 'json' });
@@ -630,7 +643,7 @@ async function checkExpirations() {
     if(expDate <= now) continue;
     const daysLeft = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
     if (daysLeft <= 7) {
-      const message = `提醒：VPS【${vps.name}】将于 ${expDate.toLocaleDateString()} 到期，还剩 ${daysLeft} 天，请及时续费。`;
+      const message = `提醒：VPS【${vps.name}】将于 ${expDate.toISOString().split('T')[0]} 到期，还剩 ${daysLeft} 天，请及时续费。`;
       await sendTelegramNotification(message);
     }
   }
